@@ -249,7 +249,7 @@ Ext.define('ForcastAccuracy', {
 
     _updateDateMetricsChart: function() {
         if (this.down('#dateMetricsChart')){ this.down('#dateMetricsChart').destroy();}
-        this._drawChart('dateMetricsChart', 'Date', this.dateMetrics);
+        this._drawChart('dateMetricsChart', 'Duration', this.dateMetrics);
     },
 
     _drawChart: function(id, title, data) {
@@ -290,7 +290,7 @@ Ext.define('ForcastAccuracy', {
                     type: 'logarithmic'
                 },
                 yAxis: {
-                    title: { text: 'Actual vs Predicted Percent Of ' + title},
+                    title: { text: 'Actual vs Predicted Percentage (' + title + ')'},
                     type: 'logarithmic'
                 },
                 tooltip: {
