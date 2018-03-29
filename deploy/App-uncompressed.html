@@ -10,6 +10,7 @@
                 Ext.define('ForcastAccuracy', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    itemId: 'rallyApp',
     progressField: 'AcceptedLeafStoryCount',
 
     config: {
@@ -65,7 +66,6 @@
     },
 
     launch: function() {
-        
         this.showMask('Fetching items with historical data...');
         //Fetch all the portfolio items of interest that have completed dates with the settings limits
 
@@ -77,14 +77,9 @@
     },
 
     onSettingsUpdate: function() {
-        //Do the same as if we restarted.....
-        this.model = this.getSetting('piType') || 'Portfolioitem/Feature';
-        this.start = new Date(this.getSetting('StartDate') || Ext.Date.now()-7776000000);
-        this.end   = new Date(this.getSetting('EndDate') || Ext.Date.now());
-
         //Here we might have some old stuff, so remove/clear before calling the fetch
-//        this._clearStatus();
-//        this._fetchItems();
+        this._clearStatus();
+        this._fetchItems();
     },
 
     _clearStatus: function() {
@@ -125,10 +120,6 @@
             listeners: {
                 load: function(store,records,status) {
                     if (!status) {
-                        Rally.ui.notify.Notifier.showError({
-                            message: 'Failed to fetch data from Rally',
-                            timeout: 5000
-                        });
                         me.hideMask();
                         return;
                     }
@@ -294,11 +285,8 @@
             loadMask: false,
             itemId: id,
             chartColors: 
-                ['rgba(27,158,119,0.5)','rgba(217,95,2,0.5)','rgba(117,112,179,0.5)','rgba(231,41,138)',
-                 'rgba(102,166,30,0.5)','rgba(230,171,2,0.5)','rgba(166,118,29,0.5)','rgba(102,102,102,0.5)'],
-            // chartColors: ['rgba(215,48,39, 0.7)','rgba(244,109,67, 0.7)','rgba(253,174,97, 0.7)','rgba(254,224,144, 0.7)',
-            //                 'rgba(255,255,191,0.7)','rgba(224,243,248,0.7)','rgba(171,217,233, 0.7)','rgba(116,173,209,0.7)',
-            //                 'rgba(69,117,180,0.7)'],
+                ['rgba(27,158,119,0.4)','rgba(217,95,2,0.4)','rgba(117,112,179,0.4)','rgba(231,41,138)',
+                 'rgba(102,166,30,0.4)','rgba(230,171,2,0.4)','rgba(166,118,29,0.4)','rgba(102,102,102,0.4)'],
             chartConfig: {
                 chart: {
                     type: 'scatter',
@@ -307,7 +295,7 @@
                     text: title + ' Prediction Accuracy',                    
                 },
                 xAxis: {
-                    title: { text: 'PreliminaryEstimate Value of Portfolio Items'},
+                    title: { text: 'PreliminaryEstimate Value of ' + me.getSetting('piType')},
                     type: 'logarithmic'
                 },
                 yAxis: {
