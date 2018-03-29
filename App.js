@@ -1,7 +1,6 @@
 Ext.define('ForcastAccuracy', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-//    chunkByField: 'PreliminaryEstimate',
     progressField: 'AcceptedLeafStoryCount',
 
     config: {
