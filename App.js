@@ -1,4 +1,4 @@
-Ext.define('ForcastAccuracy', {
+Ext.define('ForecastAccuracy', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     itemId: 'rallyApp',
@@ -171,7 +171,39 @@ Ext.define('ForcastAccuracy', {
                         }
                         me.dateMetrics = _.sortBy(me.dateMetrics, ['x']);
                         me._updateDateMetricsChart();
-                        me.hideMask();
+
+                        //Story point delivery metrics
+                        me.rateMetrics = [];
+                        for ( k = 0; k < store.getCount(); k++) {
+                             var asd = records[k].get('ActualStartDate'),
+                                 aed = records[k].get('ActualEndDate'),
+                                 pre = records[k].get('PreliminaryEstimate');
+                             if (pre) {
+                                 if (asd && aed) {
+                                     //Rate per week
+                                     var rate = (records[k].get('LeafStoryPlanEstimateTotal')* 604800000)/(new Date(aed) -  new Date(asd));
+                                     if (rate < 100) {  //Feature teams shouldn't be doing more than this. Famous last words.....
+                                        //Usually a high rate figure is caused by someone fiddling the dates/sizes due to poor practices
+                                        me.rateMetrics.push( {
+                                            groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                                            x: records[k].get('PreliminaryEstimateValue'),
+                                            y: rate,
+                                            name: records[k].get('FormattedID')
+                                        });
+                                     }
+                                 } else {
+                                     me.rateMetrics.push ( {
+                                         groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                                         x: records[k].get('PreliminaryEstimateValue'),
+                                         y: 0,
+                                         name: records[k].get('FormattedID')
+                                     });
+                                 }
+                             }
+                         }
+                         me.rateMetrics = _.sortBy(me.rateMetrics, ['x']);
+                         me._updateRateMetricsChart();
+                         me.hideMask();
 
                         // var histData = [];
                         // me.fetchedCount = 0;
@@ -244,15 +276,32 @@ Ext.define('ForcastAccuracy', {
 
     _updateSizeMetricsChart: function() {
         if (this.down('#sizeMetricsChart')){ this.down('#sizeMetricsChart').destroy();}
-        this._drawChart('sizeMetricsChart', 'Size', this.sizeMetrics);
+        this._drawChart('sizeMetricsChart', 
+            'Size Prediction Accuracy', 
+            'Actual vs Predicted Percentage ( Size )',
+            this.sizeMetrics
+        );
     },
 
     _updateDateMetricsChart: function() {
         if (this.down('#dateMetricsChart')){ this.down('#dateMetricsChart').destroy();}
-        this._drawChart('dateMetricsChart', 'Duration', this.dateMetrics);
+        this._drawChart('dateMetricsChart', 
+            'Duration Prediction Accuracy', 
+            'Actual vs Predicted Percentage ( Duration )',
+            this.dateMetrics
+        );
     },
 
-    _drawChart: function(id, title, data) {
+    _updateRateMetricsChart: function() {
+        if (this.down('#rateMetricsChart')){ this.down('#rateMetricsChart').destroy();}
+        this._drawChart('rateMetricsChart',
+            'Story Points Delivery',
+            'Points per Week', 
+            this.rateMetrics
+        );
+    },
+
+    _drawChart: function(id, title, yAxis, data) {
         var me = this;
         //Group by name so that we can create a number of series for the plot
         var groups = _.groupBy(data, 'groupBy');
@@ -271,7 +320,7 @@ Ext.define('ForcastAccuracy', {
         });
         me.down('#chartBox').add( {
             xtype: 'rallychart',
-            width: '50%',
+            width: '33%',
             height: 600,
             loadMask: false,
             itemId: id,
@@ -283,14 +332,14 @@ Ext.define('ForcastAccuracy', {
                     type: 'scatter',
                 },
                 title: { 
-                    text: title + ' Prediction Accuracy',                    
+                    text: title,                    
                 },
                 xAxis: {
                     title: { text: 'PreliminaryEstimate Value of ' + me.getSetting('piType')},
                     type: 'logarithmic'
                 },
                 yAxis: {
-                    title: { text: 'Actual vs Predicted Percentage (' + title + ')'},
+                    title: { text: yAxis},
                     type: 'logarithmic'
                 },
                 tooltip: {
