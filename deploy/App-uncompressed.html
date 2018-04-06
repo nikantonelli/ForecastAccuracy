@@ -17,7 +17,8 @@
         defaultSettings: {
             fetchLimit: 100,
             EndDate: new Date(),
-            StartDate: new Date(Ext.Date.now()-7776000000)
+            StartDate: new Date(Ext.Date.now()-7776000000),
+            removeOutliers: true
         }
     },
     items: [
@@ -43,7 +44,7 @@
                 label: 'Max Fetch Limit',
                 labelWidth: 200,
                 maxValue: 200,
-                minValue: 1,
+                minValue: 0,
                 allowDecimals: false
             },
             {
@@ -60,6 +61,10 @@
                 labelWidth: 200,
                 fieldLabel: 'End Date',
                 format: 'F j, Y',
+            },{
+                xtype: 'rallycheckboxfield',
+                fieldLabel: 'Remove outliers',
+                name: 'removeOutliers'
             }
         ];
 
@@ -117,6 +122,7 @@
                     value: me.start
                 }
             ],
+            limit: me.getSetting('fetchLimit') || Infinity,
             listeners: {
                 load: function(store,records,status) {
                     if (!status) {
@@ -126,94 +132,20 @@
                     //Now we have headline list of items, so fetch historic data plot daily positions
                     if ( store.getCount()){
                         Rally.ui.notify.Notifier.show({
-                            message: 'Working with ' + store.getCount() + ' (of ' +
-                                store.totalCount + ') Historical Data Items',
+                            message: 'Fetched ' + store.getCount() + ' (of ' +
+                                store.totalCount + ') Items',
                             timeout: 5000
                         });
                         /* Get metrics from WSAPI info
                             E.g. PreliminaryEstimate vs LeafStoryPlanEstimateTotal
                         */
 
-                       //Going to plot bellcurves
-                       me.sizeMetrics = [];
-                       var k =0;
-                       for ( k = 0; k < store.getCount(); k++) {
-                           if ( records[k].get('PreliminaryEstimate')) {
-                                me.sizeMetrics.push( {
-                                    groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
-                                    x: records[k].get('PreliminaryEstimateValue'),
-                                    y: (records[k].get('LeafStoryPlanEstimateTotal')/records[k].get('PreliminaryEstimateValue'))* 100.0,
-                                    name: records[k].get('FormattedID')
-                                });
-                           }
-                       }
-                       me.sizeMetrics = _.sortBy(me.sizeMetrics, ['x']);
-                       me._updateSizeMetricsChart();
+                        me._doSizeMetrics(records);
+                        me._doDateMetrics(records);
+                        me._doRateMetrics(records);
+                        me.hideMask();
 
-                       me.dateMetrics = [];
-                       for ( k = 0; k < store.getCount(); k++) {
-                            var asd = records[k].get('ActualStartDate'),
-                                aed = records[k].get('ActualEndDate'),
-                                psd = records[k].get('PlannedStartDate'),
-                                ped = records[k].get('PlannedEndDate'),
-                                pre = records[k].get('PreliminaryEstimate');
-                            if (pre) {
-                                if (asd && aed && psd && ped) {
-                                    
-                                    var percent = (new Date(aed) -  new Date(asd))/
-                                                    (new Date(ped) -  new Date(psd)) * 100.0;
-                                    me.dateMetrics.push( {
-                                        groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
-                                        x: records[k].get('PreliminaryEstimateValue'),
-                                        y: percent,
-                                        name: records[k].get('FormattedID')
-                                    });
-                                } else {
-                                    me.dateMetrics.push ( {
-                                        groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
-                                        x: records[k].get('PreliminaryEstimateValue'),
-                                        y: 0,
-                                        name: records[k].get('FormattedID')
-                                    });
-                                }
-                            }
-                        }
-                        me.dateMetrics = _.sortBy(me.dateMetrics, ['x']);
-                        me._updateDateMetricsChart();
-
-                        //Story point delivery metrics
-                        me.rateMetrics = [];
-                        for ( k = 0; k < store.getCount(); k++) {
-                             var asd = records[k].get('ActualStartDate'),
-                                 aed = records[k].get('ActualEndDate'),
-                                 pre = records[k].get('PreliminaryEstimate');
-                             if (pre) {
-                                 if (asd && aed) {
-                                     //Rate per week
-                                     var rate = (records[k].get('LeafStoryPlanEstimateTotal')* 604800000)/(new Date(aed) -  new Date(asd));
-                                     if (rate < 100) {  //Feature teams shouldn't be doing more than this. Famous last words.....
-                                        //Usually a high rate figure is caused by someone fiddling the dates/sizes due to poor practices
-                                        me.rateMetrics.push( {
-                                            groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
-                                            x: records[k].get('PreliminaryEstimateValue'),
-                                            y: rate,
-                                            name: records[k].get('FormattedID')
-                                        });
-                                     }
-                                 } else {
-                                     me.rateMetrics.push ( {
-                                         groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
-                                         x: records[k].get('PreliminaryEstimateValue'),
-                                         y: 0,
-                                         name: records[k].get('FormattedID')
-                                     });
-                                 }
-                             }
-                         }
-                         me.rateMetrics = _.sortBy(me.rateMetrics, ['x']);
-                         me._updateRateMetricsChart();
-                         me.hideMask();
-
+                        //Find the artefact with the longest duration from the filtered data set
                         // var histData = [];
                         // me.fetchedCount = 0;
                         // var promises = [];
@@ -283,35 +215,133 @@
         return {};
     },
 
-    _updateSizeMetricsChart: function() {
+    _doSizeMetrics: function(records){
+        //Going to plot bellcurves
+        var sizeMetrics = [];
+        for ( var k = 0; k < records.length; k++) {
+            if ( records[k].get('PreliminaryEstimate')) {
+                 sizeMetrics.push( {
+                     groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                     x: records[k].get('PreliminaryEstimateValue'),
+                     y: (records[k].get('LeafStoryPlanEstimateTotal')/records[k].get('PreliminaryEstimateValue'))* 100.0,
+                     name: records[k].get('FormattedID')
+                 });
+            }
+        }
+        sizeMetrics = _.sortBy(sizeMetrics, ['x']);
+        this._updateSizeMetricsChart(sizeMetrics);
+     },
+
+    _updateSizeMetricsChart: function(sizeMetrics) {
         if (this.down('#sizeMetricsChart')){ this.down('#sizeMetricsChart').destroy();}
         this._drawChart('sizeMetricsChart', 
             'Size Prediction Accuracy', 
             'Actual vs Predicted Percentage ( Size )',
-            this.sizeMetrics
+            sizeMetrics
         );
     },
 
-    _updateDateMetricsChart: function() {
+    _doDateMetrics: function(records) {                         
+        var dateMetrics = [];
+        for ( var k = 0; k < records.length; k++) {
+             var asd = records[k].get('ActualStartDate'),
+                 aed = records[k].get('ActualEndDate'),
+                 psd = records[k].get('PlannedStartDate'),
+                 ped = records[k].get('PlannedEndDate'),
+                 pre = records[k].get('PreliminaryEstimate');
+             if (pre) {
+                 if (asd && aed && psd && ped) {
+                     
+                     var percent = (new Date(aed) -  new Date(asd))/
+                                     (new Date(ped) -  new Date(psd)) * 100.0;
+                     dateMetrics.push( {
+                         groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                         x: records[k].get('PreliminaryEstimateValue'),
+                         y: percent,
+                         name: records[k].get('FormattedID')
+                     });
+                 } else {
+                     dateMetrics.push ( {
+                         groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                         x: records[k].get('PreliminaryEstimateValue'),
+                         y: 0,
+                         name: records[k].get('FormattedID')
+                     });
+                 }
+             }
+         }
+         dateMetrics = _.sortBy(dateMetrics, ['x']);
+         this._updateDateMetricsChart(dateMetrics);
+
+    },
+
+    _updateDateMetricsChart: function(dateMetrics) {
         if (this.down('#dateMetricsChart')){ this.down('#dateMetricsChart').destroy();}
         this._drawChart('dateMetricsChart', 
             'Duration Prediction Accuracy', 
             'Actual vs Predicted Percentage ( Duration )',
-            this.dateMetrics
+            dateMetrics
         );
     },
 
-    _updateRateMetricsChart: function() {
+    _doRateMetrics: function(records) {
+        //Story point delivery metrics
+        var rateMetrics = [];
+        for ( var k = 0; k < records.length; k++) {
+            var asd = records[k].get('ActualStartDate'),
+                aed = records[k].get('ActualEndDate'),
+                pre = records[k].get('PreliminaryEstimate');
+            if (pre) {
+                if (asd && aed) {
+                    //Rate per week
+                    var rate = (records[k].get('LeafStoryPlanEstimateTotal')* 604800000)/(new Date(aed) -  new Date(asd));
+                    if (rate < 100) {  //Feature teams shouldn't be doing more than this. Famous last words.....
+                    //Usually a high rate figure is caused by someone fiddling the dates/sizes due to poor practices
+                    rateMetrics.push( {
+                        groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                        x: records[k].get('PreliminaryEstimateValue'),
+                        y: rate,
+                        name: records[k].get('FormattedID')
+                    });
+                    }
+                } else {
+                    rateMetrics.push ( {
+                        groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                        x: records[k].get('PreliminaryEstimateValue'),
+                        y: 0,
+                        name: records[k].get('FormattedID')
+                    });
+                }
+            }
+        }
+        rateMetrics = _.sortBy(rateMetrics, ['x']);
+        this._updateRateMetricsChart(rateMetrics);
+                         
+    },
+
+    _updateRateMetricsChart: function(rateMetrics) {
         if (this.down('#rateMetricsChart')){ this.down('#rateMetricsChart').destroy();}
         this._drawChart('rateMetricsChart',
             'Story Points Delivery',
             'Points per Week', 
-            this.rateMetrics
+            rateMetrics
         );
     },
 
     _drawChart: function(id, title, yAxis, data) {
         var me = this;
+
+        //Some data points may be erroneous, so let's take the 10% to 90% data points
+        if (this.getSetting('removeOutliers')) {
+            data = _.sortBy(data, 'y');
+            var dataLen = data.length;
+            data = _.initial(_.rest(data, 
+                Math.floor(dataLen * 0.1)) || 1,
+                Math.ceil(dataLen * 0.1) || 1
+            );
+        }
+
+        data = _.sortBy(data, 'x');
         //Group by name so that we can create a number of series for the plot
         var groups = _.groupBy(data, 'groupBy');
         var seriesData = [];
@@ -327,21 +357,34 @@
                 data: plotData,
             });
         });
+        var opacity = 1/Math.log1p(data.length);
         me.down('#chartBox').add( {
             xtype: 'rallychart',
             width: '33%',
             height: 600,
             loadMask: false,
             itemId: id,
-            chartColors: 
-                ['rgba(27,158,119,0.4)','rgba(217,95,2,0.4)','rgba(117,112,179,0.4)','rgba(231,41,138)',
-                 'rgba(102,166,30,0.4)','rgba(230,171,2,0.4)','rgba(166,118,29,0.4)','rgba(102,102,102,0.4)'],
+            // chartColors: 
+                // ['rgba(27,158,119,0.4)','rgba(217,95,2,0.4)','rgba(117,112,179,0.4)','rgba(231,41,138)',
+                //  'rgba(102,166,30,0.4)','rgba(230,171,2,0.4)','rgba(166,118,29,0.4)','rgba(102,102,102,0.4)'],
+
+                 chartColors: [
+                    'rgba(27,158,119,' + opacity + ')',
+                    'rgba(217,95,2,' + opacity + ')',
+                    'rgba(117,112,179,' + opacity + ')',
+                    'rgba(231,41,138,' + opacity + ')',
+                    'rgba(102,166,30,' + opacity + ')',
+                    'rgba(230,171,2,' + opacity + ')',
+                    'rgba(166,118,29,' + opacity + ')',
+                    'rgba(102,102,102,' + opacity + ')'
+                ],
+    
             chartConfig: {
                 chart: {
                     type: 'scatter',
                 },
                 title: { 
-                    text: title,                    
+                    text: title + ' (' + data.length + ' items)',                    
                 },
                 xAxis: {
                     title: { text: 'PreliminaryEstimate Value of ' + me.getSetting('piType')},
