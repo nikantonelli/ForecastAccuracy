@@ -49,7 +49,8 @@ Ext.define('ForecastAccuracy', {
                             direction: 'ASC'
                         }
                     ]
-                }
+                },
+                valueField: 'Name'
             },
             {
                 xtype: 'rallydatefield',
@@ -180,7 +181,7 @@ Ext.define('ForecastAccuracy', {
                         for ( i = 0; i < records.length; i++) {
                             //If no plot sizing specified, then show them all.
             
-                            if (!me.getSetting('plotItemSize') || (records[i].get('PreliminaryEstimate')._ref === me.getSetting('plotItemSize'))) {
+                            if (!me.getSetting('plotItemSize') || (records[i].get('PreliminaryEstimate')._refObjectName === me.getSetting('plotItemSize'))) {
                                 promises.push (me._getHistoricalData(records[i], me));
                             }
                         }
@@ -193,7 +194,7 @@ Ext.define('ForecastAccuracy', {
                                 //First we need the scope of the date range. We have the start already, now we
                                 //need to know the max
                                 me._addCompletionSpline(seriesList,me);
-                                me._drawMcChart(seriesList);
+                                me._drawMcChart(seriesList, me);
                             },
                             failure: function() {
                                 console.log('Oops!');
@@ -223,7 +224,7 @@ Ext.define('ForecastAccuracy', {
             }
         });
         //Now, we can skip along the series array in steps and create a spline curve
-        var dateStep = (lastDate - firstDate) / 20;
+        var dateStep = (lastDate - firstDate) / 10;
         var splineSeries = {
             name: 'Completed This Period',
             type: 'spline',
@@ -531,7 +532,7 @@ Ext.define('ForecastAccuracy', {
         });
     },
 
-    _drawMcChart: function(seriesData) {
+    _drawMcChart: function(seriesData, me) {
         var opacity = 1/Math.log1p(seriesData.length);
         this.down('#mcBox').add( {
             xtype: 'rallychart',
@@ -557,7 +558,7 @@ Ext.define('ForecastAccuracy', {
                     enabled: false
                 },
                 title: { 
-                    text: ' Probabalistic Forecast',
+                    text: ' Probabalistic Forecast for ' + ( me.getSetting('plotItemSize') || 'All sizes'),
                 },
                 xAxis: {
                     title: { text: 'Date' },
