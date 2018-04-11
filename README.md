@@ -1,4 +1,4 @@
-PI Forcecast Accuracy
+PI Forecast Accuracy
 =========================
 
 ## Overview
