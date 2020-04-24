@@ -1,10 +1,12 @@
+const maxRateMetric = 1000;
+
 Ext.define('ForecastAccuracy', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     itemId: 'rallyApp',
     config: {
         defaultSettings: {
-            fetchLimit: 100,
+            fetchLimit: 1000,
             EndDate: new Date(),
             plotDate: new Date(),
             StartDate: new Date(Ext.Date.now()-7776000000),
@@ -110,7 +112,7 @@ Ext.define('ForecastAccuracy', {
     },
 
     _clearStatus: function() {
-        if (this.store) { this.store.destroy(); }
+        if (this.store) { this.store = null; }
     },
 
     showMask: function(msg) {
@@ -217,7 +219,7 @@ Ext.define('ForecastAccuracy', {
     _addCompletionSpline: function(seriesList, me) {
 
         var firstDate = new Date(me.getSetting('plotDate')).valueOf();
-        var lastDate = firstDate;
+        var lastDate = Ext.Date.add(new Date(me.getSetting('plotDate')), Ext.Date.MONTH,1).valueOf();
         _.each(seriesList, function(series) {
             if (series.data[series.data.length - 1][0] > lastDate){ 
                 lastDate = series.data[series.data.length - 1][0];
@@ -397,6 +399,7 @@ Ext.define('ForecastAccuracy', {
 
     _doRateMetrics: function(records) {
         //Story point delivery metrics
+        debugger;
         var rateMetrics = [];
         for ( var k = 0; k < records.length; k++) {
             var asd = records[k].get('ActualStartDate'),
@@ -406,14 +409,14 @@ Ext.define('ForecastAccuracy', {
                 if (asd && aed) {
                     //Rate per week
                     var rate = (records[k].get('LeafStoryPlanEstimateTotal')* 604800000)/(new Date(aed) -  new Date(asd));
-                    if (rate < 100) {  //Feature teams shouldn't be doing more than this. Famous last words.....
-                    //Usually a high rate figure is caused by someone fiddling the dates/sizes due to poor practices
-                    rateMetrics.push( {
-                        groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
-                        x: records[k].get('PreliminaryEstimateValue'),
-                        y: rate,
-                        name: records[k].get('FormattedID')
-                    });
+                    if (rate < maxRateMetric) {  //Feature teams shouldn't be doing more than this. Famous last words.....
+                        //Usually a high rate figure is caused by someone fiddling the dates/sizes due to poor practices
+                        rateMetrics.push( {
+                            groupBy: records[k].get('PreliminaryEstimate')._refObjectName,
+                            x: records[k].get('PreliminaryEstimateValue'),
+                            y: rate,
+                            name: records[k].get('FormattedID')
+                        });
                     }
                 } else {
                     rateMetrics.push ( {
@@ -425,7 +428,6 @@ Ext.define('ForecastAccuracy', {
                 }
             }
         }
-        rateMetrics = _.sortBy(rateMetrics, ['x']);
         this._updateRateMetricsChart(rateMetrics);
                          
     },
@@ -441,7 +443,7 @@ Ext.define('ForecastAccuracy', {
 
     _drawMetricsChart: function(id, title, yAxis, data) {
         var me = this;
-        if (!data.length) { return; }
+//        if (!data.length) { return; }
 
         //Some data points may be erroneous, so let's take the 10% to 90% data points
         if (this.getSetting('removeOutliers')) {
